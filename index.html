@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>我的ライブカメラ</title>
+<style>
+/* 版面：頂部工具列 + 自適應鏡頭格（手機一欄、寬螢幕兩到三欄） */
+:root{
+  --bg:#eef1f3; --panel:#ffffff; --fg:#1b2329; --muted:#5d6b75; --line:#d5dbe0;
+  --accent:#1f6f8b; --live:#d6402f;
+  --sans:"Noto Sans TC","Noto Sans JP",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#12171b; --panel:#1b2228; --fg:#e4e9ec; --muted:#93a1ab; --line:#2c363e;
+  --accent:#5fb3cf; --live:#ff6a57; color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--sans);
+  padding:max(12px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 32px max(16px,env(safe-area-inset-left))}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:16px}
+h1{font-size:1.35rem;margin:0;letter-spacing:.02em}
+.clock{font-family:var(--mono);color:var(--muted);font-size:.85rem;font-variant-numeric:tabular-nums}
+button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--fg);
+  border-radius:8px;padding:6px 12px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+.tabs button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(min(100%,420px),1fr))}
+.cam{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+.screen{position:relative;aspect-ratio:16/9;background:#000;max-width:100%}
+.screen iframe,.screen img{position:absolute;inset:0;width:100%;height:100%;border:0;object-fit:contain}
+.screen .linkonly{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:16px;color:#cfd8dd;font-size:.9rem}
+.badge{position:absolute;top:8px;left:8px;background:var(--live);color:#fff;font-size:.7rem;font-weight:700;
+  letter-spacing:.08em;padding:2px 8px;border-radius:4px}
+.meta{padding:10px 12px;display:flex;flex-direction:column;gap:4px}
+.meta h2{font-size:1rem;margin:0}
+.meta .sub{color:var(--muted);font-size:.82rem}
+.meta .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:4px}
+.meta a{color:var(--accent)}
+.meta .del{margin-left:auto;font-size:.8rem;padding:2px 8px;color:var(--muted)}
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--fg);width:min(520px,92vw)}
+dialog form{display:flex;flex-direction:column;gap:10px}
+label{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--muted)}
+input,select{font:inherit;padding:8px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
+.hint{font-size:.8rem;color:var(--muted)}
+.actions{display:flex;gap:8px;justify-content:flex-end}
+</style>
+</head>
+<body>
+<header>
+  <h1>我的ライブカメラ</h1>
+  <span class="clock" id="clock"></span>
+  <div style="display:flex;gap:8px">
+    <button id="addBtn" class="primary">＋ 新增鏡頭</button>
+    <button id="resetBtn" title="恢復預設清單">重設</button>
+  </div>
+</header>
+<nav class="tabs" id="tabs"></nav>
+<main class="grid" id="grid"></main>
+
+<dialog id="dlg">
+  <form id="form" method="dialog">
+    <strong>新增鏡頭</strong>
+    <label>名稱<input id="f-name" required placeholder="例如：月山第1トンネル 鶴岡側"></label>
+    <label>分組<input id="f-group" placeholder="例如：月山道路"></label>
+    <label>類型
+      <select id="f-type">
+        <option value="youtube">YouTube 直播（貼網址）</option>
+        <option value="image">靜態圖片（定時重新整理）</option>
+        <option value="link">只放連結（網站不允許內嵌時）</option>
+      </select>
+    </label>
+    <label>網址<input id="f-url" required placeholder="https://"></label>
+    <label>說明（選填）<input id="f-note"></label>
+    <p class="hint">在官方鏡頭頁面的圖片上按右鍵 →「複製圖片網址」，選「靜態圖片」就能直接顯示並每 5 分鐘更新。</p>
+    <div class="actions">
+      <button value="cancel" formnovalidate>取消</button>
+      <button value="ok" class="primary">加入</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+// 預設清單：2026-11 時查到的公開來源。YouTube 直播若重開，影片 ID 會變，需更新。
+const DEFAULTS = [
+  { group:"台東金樽", name:"金樽 4K 即時影像（臺東縣政府）", type:"youtube",
+    url:"https://www.youtube.com/watch?v=q3KJt-SZc2s", note:"臺東縣政府觀光發展處建置" },
+  { group:"台東金樽", name:"金樽遊憩區（東部海岸國家風景區）", type:"youtube",
+    url:"https://www.youtube.com/watch?v=ZdqHgQwvZOw", note:"東部海岸國家風景區管理處" },
+  { group:"月山道路", name:"庄内の国道ライブカメラ（月山第1・第2TN 鶴岡側）", type:"link",
+    url:"https://www.thr.mlit.go.jp/sakata/road/view/", note:"国土交通省 酒田河川国道事務所" },
+  { group:"月山道路", name:"山形県内道路情報（月山IC・西川町側）", type:"link",
+    url:"http://keitai.thr.mlit.go.jp/yamagata/", note:"国土交通省 山形河川国道事務所・約30分更新" },
+];
+const KEY = "my-livecams-v1";
+const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || DEFAULTS.slice(); } catch { return DEFAULTS.slice(); } };
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(cams)); } catch {} };
+let cams = load();
+let filter = "全部";
+
+function ytId(u){
+  const m = u.match(/(?:v=|youtu\.be\/|\/live\/|\/embed\/)([\w-]{11})/);
+  return m ? m[1] : null;
+}
+function esc(s){ return String(s||"").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+function screenHTML(c){
+  if (c.type === "youtube"){
+    const id = ytId(c.url);
+    if (id) return `<span class="badge">LIVE</span><iframe src="https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&playsinline=1" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen loading="lazy" title="${esc(c.name)}"></iframe>`;
+    // 頻道直播網址：https://www.youtube.com/channel/UCxxxx → 嵌入頻道目前的直播
+    const ch = c.url.match(/channel\/(UC[\w-]+)/);
+    if (ch) return `<span class="badge">LIVE</span><iframe src="https://www.youtube-nocookie.com/embed/live_stream?channel=${ch[1]}&autoplay=1&mute=1" allow="autoplay; encrypted-media; fullscreen" allowfullscreen loading="lazy"></iframe>`;
+  }
+  if (c.type === "image") return `<img data-src="${esc(c.url)}" alt="${esc(c.name)}">`;
+  return `<div class="linkonly">這個網站不允許內嵌<br>點下方連結開啟官方鏡頭頁面</div>`;
+}
+
+function render(){
+  const groups = ["全部", ...new Set(cams.map(c => c.group || "未分組"))];
+  if (!groups.includes(filter)) filter = "全部";
+  document.getElementById("tabs").innerHTML = groups.map(g =>
+    `<button aria-pressed="${g===filter}" data-g="${esc(g)}">${esc(g)}</button>`).join("");
+  document.getElementById("grid").innerHTML = cams.map((c,i) => ({c,i}))
+    .filter(({c}) => filter==="全部" || (c.group||"未分組")===filter)
+    .map(({c,i}) => `
+    <article class="cam">
+      <div class="screen">${screenHTML(c)}</div>
+      <div class="meta">
+        <h2>${esc(c.name)}</h2>
+        <span class="sub">${esc(c.group||"")}${c.note ? "・"+esc(c.note) : ""}</span>
+        <div class="row">
+          <a href="${esc(c.url)}" target="_blank" rel="noopener">開啟原始頁面 ↗</a>
+          <button class="del" data-i="${i}">移除</button>
+        </div>
+      </div>
+    </article>`).join("");
+  refreshImages();
+}
+function refreshImages(){
+  document.querySelectorAll("img[data-src]").forEach(img => {
+    const u = img.dataset.src;
+    img.src = u + (u.includes("?") ? "&" : "?") + "_t=" + Date.now();
+  });
+}
+setInterval(refreshImages, 5*60*1000);
+setInterval(() => { document.getElementById("clock").textContent =
+  "台灣 " + new Date().toLocaleTimeString("zh-TW",{timeZone:"Asia/Taipei",hour12:false}) +
+  "　日本 " + new Date().toLocaleTimeString("ja-JP",{timeZone:"Asia/Tokyo",hour12:false}); }, 1000);
+
+document.getElementById("tabs").onclick = e => { const g = e.target.dataset.g; if (g){ filter = g; render(); } };
+document.getElementById("grid").onclick = e => { const i = e.target.dataset.i; if (i !== undefined){ cams.splice(+i,1); save(); render(); } };
+document.getElementById("resetBtn").onclick = () => { cams = DEFAULTS.slice(); save(); render(); };
+const dlg = document.getElementById("dlg");
+document.getElementById("addBtn").onclick = () => dlg.showModal();
+dlg.addEventListener("close", () => {
+  if (dlg.returnValue !== "ok") return;
+  const v = id => document.getElementById(id).value.trim();
+  cams.push({ name:v("f-name"), group:v("f-group"), type:v("f-type"), url:v("f-url"), note:v("f-note") });
+  save(); document.getElementById("form").reset(); render();
+});
+render();
+</script>
+</body>
+</html>
