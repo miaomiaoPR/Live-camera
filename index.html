@@ -48,6 +48,18 @@ label{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--mu
 input,select{font:inherit;padding:8px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
 .hint{font-size:.8rem;color:var(--muted)}
 .actions{display:flex;gap:8px;justify-content:flex-end}
+textarea{font:13px/1.4 var(--mono);padding:8px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--fg);resize:vertical}
+.search{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--panel);border:1px solid var(--line);
+  border-radius:10px;padding:12px;margin-bottom:16px}
+.search input{flex:1 1 240px;min-width:0}
+.search .hint{flex-basis:100%;margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{font-size:.8rem;padding:4px 10px;border-radius:999px}
+.chips button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+#f-error{color:var(--live)}
+#f-error:empty{display:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 </style>
 </head>
 <body>
@@ -59,24 +71,39 @@ input,select{font:inherit;padding:8px;border-radius:6px;border:1px solid var(--l
     <button id="resetBtn" title="恢復預設清單">重設</button>
   </div>
 </header>
+<form class="search" id="search">
+  <label for="q" class="sr">搜尋 YouTube 直播</label>
+  <input id="q" type="search" placeholder="想看哪裡？例如：京都 嵐山、Venice、Hawaii beach" autocomplete="off">
+  <div class="chips" id="suffix" role="group" aria-label="搜尋關鍵字">
+    <button type="button" data-s="live cam" aria-pressed="true">live cam</button>
+    <button type="button" data-s="ライブカメラ" aria-pressed="false">ライブカメラ</button>
+    <button type="button" data-s="即時影像" aria-pressed="false">即時影像</button>
+  </div>
+  <button class="primary" type="submit">在 YouTube 搜尋直播 ↗</button>
+  <p class="hint">會在新分頁開啟 YouTube，只列出「正在直播」的影片。找到喜歡的，複製網址回來按「＋ 新增鏡頭」貼上。</p>
+</form>
 <nav class="tabs" id="tabs"></nav>
 <main class="grid" id="grid"></main>
 
 <dialog id="dlg">
   <form id="form" method="dialog">
     <strong>新增鏡頭</strong>
-    <label>名稱<input id="f-name" required placeholder="例如：月山第1トンネル 鶴岡側"></label>
-    <label>分組<input id="f-group" placeholder="例如：月山道路"></label>
+    <label>網址或嵌入碼
+      <textarea id="f-url" required rows="3" placeholder="貼上 YouTube 網址、圖片網址、網頁網址，或 <iframe …> 嵌入碼"></textarea>
+    </label>
+    <p class="hint" id="f-detect">貼上後會自動判斷類型。</p>
     <label>類型
       <select id="f-type">
-        <option value="youtube">YouTube 直播（貼網址）</option>
-        <option value="image">靜態圖片（定時重新整理）</option>
-        <option value="link">只放連結（網站不允許內嵌時）</option>
+        <option value="youtube">YouTube 直播</option>
+        <option value="embed">嵌入碼（網站提供的 iframe）</option>
+        <option value="image">靜態圖片（每 5 分鐘更新）</option>
+        <option value="link">只放連結</option>
       </select>
     </label>
-    <label>網址<input id="f-url" required placeholder="https://"></label>
+    <label>名稱<input id="f-name" required placeholder="例如：京都 嵐山 渡月橋"></label>
+    <label>分組<input id="f-group" list="groups" placeholder="例如：京都"><datalist id="groups"></datalist></label>
     <label>說明（選填）<input id="f-note"></label>
-    <p class="hint">在官方鏡頭頁面的圖片上按右鍵 →「複製圖片網址」，選「靜態圖片」就能直接顯示並每 5 分鐘更新。</p>
+    <p class="hint" id="f-error" role="alert"></p>
     <div class="actions">
       <button value="cancel" formnovalidate>取消</button>
       <button value="ok" class="primary">加入</button>
@@ -120,8 +147,8 @@ let cams = load();
 let filter = "全部";
 
 function ytId(u){
-  const m = u.match(/(?:v=|youtu\.be\/|\/live\/|\/embed\/)([\w-]{11})/);
-  return m ? m[1] : null;
+  const m = u.match(/(?:v=|youtu\.be\/|\/live\/|\/embed\/)([\w-]{11})(?![\w-])/);
+  return m && m[1] !== "live_stream" ? m[1] : null;
 }
 function esc(s){ return String(s||"").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
@@ -133,6 +160,8 @@ function screenHTML(c){
     const ch = c.url.match(/channel\/(UC[\w-]+)/);
     if (ch) return `<span class="badge">LIVE</span><iframe src="https://www.youtube-nocookie.com/embed/live_stream?channel=${ch[1]}&autoplay=1&mute=1" allow="autoplay; encrypted-media; fullscreen" allowfullscreen loading="lazy"></iframe>`;
   }
+  if (c.type === "embed" && /^https:\/\//.test(c.url))
+    return `<iframe src="${esc(c.url)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" loading="lazy" title="${esc(c.name)}"></iframe>`;
   if (c.type === "image") return `<img data-src="${esc(c.url)}" alt="${esc(c.name)}">`;
   return `<div class="linkonly">這個鏡頭要在官方網站觀看<br>點下方「開啟原始頁面」</div>`;
 }
@@ -172,13 +201,81 @@ setInterval(() => { document.getElementById("clock").textContent =
 document.getElementById("tabs").onclick = e => { const g = e.target.dataset.g; if (g){ filter = g; render(); } };
 document.getElementById("grid").onclick = e => { const i = e.target.dataset.i; if (i !== undefined){ cams.splice(+i,1); save(); render(); } };
 document.getElementById("resetBtn").onclick = () => { cams = DEFAULTS.slice(); save(); render(); };
-const dlg = document.getElementById("dlg");
-document.getElementById("addBtn").onclick = () => dlg.showModal();
-dlg.addEventListener("close", () => {
-  if (dlg.returnValue !== "ok") return;
-  const v = id => document.getElementById(id).value.trim();
-  cams.push({ name:v("f-name"), group:v("f-group"), type:v("f-type"), url:v("f-url"), note:v("f-note") });
-  save(); document.getElementById("form").reset(); render();
+// ── YouTube 搜尋：開新分頁，套用「直播中」篩選 ──
+const suffixBox = document.getElementById("suffix");
+suffixBox.onclick = e => {
+  const b = e.target.closest("button"); if (!b) return;
+  suffixBox.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+};
+document.getElementById("search").addEventListener("submit", e => {
+  e.preventDefault();
+  const q = document.getElementById("q").value.trim();
+  const s = suffixBox.querySelector('[aria-pressed="true"]')?.dataset.s || "";
+  const query = [q, s].filter(Boolean).join(" ");
+  const url = "https://www.youtube.com/results?search_query=" + encodeURIComponent(query) + "&sp=EgJAAQ%253D%253D";
+  const a = Object.assign(document.createElement("a"), { href:url, target:"_blank", rel:"noopener" });
+  document.body.appendChild(a); a.click(); a.remove();
+});
+
+// ── 新增鏡頭：自動判斷貼上的內容 ──
+const $ = id => document.getElementById(id);
+const dlg = $("dlg");
+
+// 從貼上的文字判斷類型，回傳 { type, url } 或 { error }
+function parseInput(raw){
+  const t = raw.trim();
+  if (/<iframe/i.test(t)){
+    const f = new DOMParser().parseFromString(t, "text/html").querySelector("iframe");
+    const src = (f?.getAttribute("src") || "").replace(/^\/\//, "https://");
+    if (!src) return { error:"嵌入碼裡找不到 src 網址，請確認貼上的是完整的 <iframe …> 程式碼。" };
+    if (!/^https:\/\//.test(src)) return { error:"嵌入碼的網址必須是 https:// 開頭。" };
+    if (ytId(src)) return { type:"youtube", url:"https://www.youtube.com/watch?v=" + ytId(src) };
+    return { type:"embed", url:src };
+  }
+  if (!/^https?:\/\//.test(t)) return { error:"請貼上 https:// 開頭的網址或 <iframe> 嵌入碼。" };
+  if (/youtube\.com|youtu\.be/.test(t) && (ytId(t) || /channel\/UC/.test(t))) return { type:"youtube", url:t };
+  if (/\.(jpe?g|png|gif|webp)(\?|$)/i.test(t)) return { type:"image", url:t };
+  return { type:"link", url:t };
+}
+const typeLabel = { youtube:"YouTube 直播", embed:"嵌入碼", image:"靜態圖片", link:"只放連結" };
+
+$("f-url").addEventListener("input", async () => {
+  const raw = $("f-url").value;
+  if (!raw.trim()) { $("f-detect").textContent = "貼上後會自動判斷類型。"; return; }
+  const r = parseInput(raw);
+  if (r.error) { $("f-detect").textContent = r.error; return; }
+  $("f-type").value = r.type;
+  $("f-detect").textContent = "判斷為：" + typeLabel[r.type] + (r.type === "embed" ? "（網址：" + r.url + "）" : "");
+  // YouTube 影片：嘗試自動帶入標題（失敗就讓使用者自己填）
+  if (r.type === "youtube" && !$("f-name").value) {
+    try {
+      const res = await fetch("https://noembed.com/embed?url=" + encodeURIComponent(r.url));
+      const j = await res.json();
+      if (j.title && !$("f-name").value) $("f-name").value = j.title.slice(0, 80);
+    } catch {}
+  }
+});
+
+$("addBtn").onclick = () => {
+  $("form").reset();
+  $("f-error").textContent = "";
+  $("f-detect").textContent = "貼上後會自動判斷類型。";
+  $("f-group").value = filter === "全部" ? "" : filter;
+  $("groups").innerHTML = [...new Set(cams.map(c => c.group).filter(Boolean))].map(g => `<option value="${esc(g)}">`).join("");
+  dlg.showModal();
+};
+$("form").addEventListener("submit", e => {
+  if (e.submitter?.value !== "ok") return;          // 取消：直接關閉
+  e.preventDefault();
+  const r = parseInput($("f-url").value);
+  if (r.error) { $("f-error").textContent = r.error; return; }
+  const type = $("f-type").value;
+  if (type === "embed" && !/^https:\/\//.test(r.url)) { $("f-error").textContent = "嵌入碼的網址必須是 https:// 開頭。"; return; }
+  if (type === "youtube" && !ytId(r.url) && !/channel\/UC/.test(r.url)) {
+    $("f-error").textContent = "這不是 YouTube 影片網址，請改選其他類型。"; return;
+  }
+  cams.push({ name:$("f-name").value.trim(), group:$("f-group").value.trim(), type, url:r.url, note:$("f-note").value.trim() });
+  save(); render(); dlg.close();
 });
 render();
 </script>
