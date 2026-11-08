@@ -7,5 +7,7 @@
 - 清單存在瀏覽器的 localStorage；預設清單在 `index.html` 的 `DEFAULTS`。
 
 ## 預設鏡頭
-- 台東金樽：臺東縣政府 4K 即時影像、東部海岸國家風景區 金樽遊憩區（YouTube）
-- 月山道路（国道112号）：酒田河川国道事務所「庄内の国道ライブカメラ」、山形河川国道事務所「山形県内道路情報」（連結）
+- 富士山：河口湖駅前、富士ビューホテル、山中湖芙蓉台、FUJIYAMAタワー（YouTube 內嵌）；富士山頂、FUJI RICE（連結）
+- 世界：渋谷スクランブル交差点、Times Square、Abbey Road、Jackson Hole、北極光 Utsjoki、AuroraMAX（連結）
+
+已經儲存過清單的瀏覽器不會自動換成新的預設清單，按「重設」即可。

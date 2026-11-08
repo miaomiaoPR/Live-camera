@@ -85,16 +85,33 @@ input,select{font:inherit;padding:8px;border-radius:6px;border:1px solid var(--l
 </dialog>
 
 <script>
-// 預設清單：2026-11 時查到的公開來源。YouTube 直播若重開，影片 ID 會變，需更新。
+// 預設清單（2026-11 查到的公開來源）。YouTube 直播重開時影片 ID 會變，需更新。
+// type:"link" 是官方網站自己的播放器，無法內嵌，只放連結。
 const DEFAULTS = [
-  { group:"台東金樽", name:"金樽 4K 即時影像（臺東縣政府）", type:"youtube",
-    url:"https://www.youtube.com/watch?v=q3KJt-SZc2s", note:"臺東縣政府觀光發展處建置" },
-  { group:"台東金樽", name:"金樽遊憩區（東部海岸國家風景區）", type:"youtube",
-    url:"https://www.youtube.com/watch?v=ZdqHgQwvZOw", note:"東部海岸國家風景區管理處" },
-  { group:"月山道路", name:"庄内の国道ライブカメラ（月山第1・第2TN 鶴岡側）", type:"link",
-    url:"https://www.thr.mlit.go.jp/sakata/road/view/", note:"国土交通省 酒田河川国道事務所" },
-  { group:"月山道路", name:"山形県内道路情報（月山IC・西川町側）", type:"link",
-    url:"http://keitai.thr.mlit.go.jp/yamagata/", note:"国土交通省 山形河川国道事務所・約30分更新" },
+  { group:"富士山", name:"富士山 河口湖駅前", type:"youtube",
+    url:"https://www.youtube.com/watch?v=1Lri-i1mVYI", note:"24 小時配信" },
+  { group:"富士山", name:"富士ビューホテル（河口湖畔）", type:"youtube",
+    url:"https://www.youtube.com/watch?v=6sin2Z5WM3I", note:"24 小時配信" },
+  { group:"富士山", name:"山中湖 芙蓉台", type:"youtube",
+    url:"https://www.youtube.com/watch?v=WjVH-0qSwOw", note:"約 30 秒延遲" },
+  { group:"富士山", name:"FUJIYAMAタワー（富士急ハイランド）", type:"youtube",
+    url:"https://www.youtube.com/watch?v=_6nLps25Kws", note:"展望台視角" },
+  { group:"富士山", name:"富士山頂 剣ヶ峰", type:"link",
+    url:"https://www.fujisan-climb.jp/livecamera/", note:"只在夏季開山期配信" },
+  { group:"富士山", name:"FUJI RICE 富士宮の田んぼ", type:"link",
+    url:"https://www.youtube.com/@fujirice_official/live", note:"頻道直播頁" },
+  { group:"世界", name:"渋谷スクランブル交差点", type:"link",
+    url:"https://www.skylinewebcams.com/webcam/japan/kanto/tokyo/tokyo-shibuya-scramble-crossing.html", note:"SkylineWebcams・東京" },
+  { group:"世界", name:"Times Square", type:"link",
+    url:"https://www.earthcam.com/usa/newyork/timessquare/", note:"EarthCam・紐約" },
+  { group:"世界", name:"Abbey Road 斑馬線", type:"link",
+    url:"https://www.earthcam.com/world/england/london/abbeyroad/", note:"EarthCam・倫敦" },
+  { group:"世界", name:"Jackson Hole Town Square", type:"link",
+    url:"https://www.seejh.com/live", note:"SeeJH・美國懷俄明州" },
+  { group:"世界", name:"北極光 Utsjoki", type:"link",
+    url:"https://www.skylinewebcams.com/webcam/finland/lapland/utsjoki/northern-lights.html", note:"SkylineWebcams・芬蘭拉普蘭，冬季夜間" },
+  { group:"世界", name:"AuroraMAX 北極光", type:"link",
+    url:"https://auroramax.com/live", note:"加拿大 Yellowknife，冬季夜間" },
 ];
 const KEY = "my-livecams-v1";
 const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || DEFAULTS.slice(); } catch { return DEFAULTS.slice(); } };
@@ -117,7 +134,7 @@ function screenHTML(c){
     if (ch) return `<span class="badge">LIVE</span><iframe src="https://www.youtube-nocookie.com/embed/live_stream?channel=${ch[1]}&autoplay=1&mute=1" allow="autoplay; encrypted-media; fullscreen" allowfullscreen loading="lazy"></iframe>`;
   }
   if (c.type === "image") return `<img data-src="${esc(c.url)}" alt="${esc(c.name)}">`;
-  return `<div class="linkonly">這個網站不允許內嵌<br>點下方連結開啟官方鏡頭頁面</div>`;
+  return `<div class="linkonly">這個鏡頭要在官方網站觀看<br>點下方「開啟原始頁面」</div>`;
 }
 
 function render(){
