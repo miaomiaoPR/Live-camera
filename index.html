@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>我的ライブカメラ</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#1f6f8b">
 <style>
 /* 版面：頂部工具列 + 自適應鏡頭格（手機一欄、寬螢幕兩到三欄） */
 :root{
@@ -58,7 +62,21 @@ textarea{font:13px/1.4 var(--mono);padding:8px;border-radius:6px;border:1px soli
 .chips button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 #f-error{color:var(--live)}
-#f-error:empty{display:none}
+#f-error:empty,#in-error:empty{display:none}
+#in-error{color:var(--live)}
+.incoming{background:var(--panel);border:2px solid var(--accent);border-radius:12px;padding:16px;margin-bottom:16px;
+  display:flex;flex-direction:column;gap:12px;font-size:1.05rem}
+.incoming h2{margin:0;font-size:1.25rem}
+.incoming .screen{border-radius:8px;overflow:hidden}
+.incoming input{font-size:1.05rem}
+.incoming .big{display:flex;gap:10px;flex-wrap:wrap}
+.incoming .big button{flex:1 1 140px;font-size:1.2rem;padding:14px 16px;border-radius:10px}
+details.help{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:16px}
+details.help summary{cursor:pointer;font-weight:600}
+details.help h3{font-size:.95rem;margin:14px 0 4px}
+details.help ol{margin:0;padding-left:1.4em;display:flex;flex-direction:column;gap:4px}
+details.help code{font-family:var(--mono);font-size:.8rem;background:var(--bg);padding:1px 4px;border-radius:4px;word-break:break-all}
+.bookmarklet{display:inline-block;background:var(--accent);color:#fff!important;text-decoration:none;padding:4px 12px;border-radius:999px;font-weight:600}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 </style>
 </head>
@@ -82,6 +100,40 @@ textarea{font:13px/1.4 var(--mono);padding:8px;border-radius:6px;border:1px soli
   <button class="primary" type="submit">在 YouTube 搜尋直播 ↗</button>
   <p class="hint">會在新分頁開啟 YouTube，只列出「正在直播」的影片。找到喜歡的，複製網址回來按「＋ 新增鏡頭」貼上。</p>
 </form>
+<section class="incoming" id="incoming" hidden aria-live="polite">
+  <h2>要加入這個鏡頭嗎？</h2>
+  <div class="screen" id="in-preview"></div>
+  <label>名稱<input id="in-name"></label>
+  <label>分組<input id="in-group" list="groups-in" placeholder="例如：京都"><datalist id="groups-in"></datalist></label>
+  <p class="hint" id="in-error" role="alert"></p>
+  <div class="big">
+    <button class="primary" id="in-ok">✓ 加入</button>
+    <button id="in-cancel">不要</button>
+  </div>
+</section>
+<details class="help" id="help">
+  <summary>從 YouTube 一鍵加入的設定方法</summary>
+  <h3>Android 手機</h3>
+  <ol>
+    <li>用 Chrome 打開這個網頁，按右上角「⋮」→「安裝應用程式」或「加到主畫面」。</li>
+    <li>之後在 YouTube 看到喜歡的直播，按「分享」→ 選「ライブカメラ」。</li>
+    <li>這個 app 會打開，按大大的「✓ 加入」就完成。</li>
+  </ol>
+  <h3>iPhone（需要先設定一次捷徑）</h3>
+  <ol>
+    <li>打開「捷徑」app → 右上角「＋」新增捷徑，名稱取「加入ライブカメラ」。</li>
+    <li>按捷徑名稱旁的 ⓘ，打開「在分享表單中顯示」，接收類型只勾「URL」。</li>
+    <li>加入動作「URL 編碼」，對象選「捷徑輸入」。</li>
+    <li>加入動作「打開 URL」，網址輸入 <code id="ios-url"></code>，最後接上「URL 編碼後的文字」。</li>
+    <li>之後在 YouTube 按「分享」→「更多」→「加入ライブカメラ」，Safari 會打開這個網頁，按「✓ 加入」。</li>
+  </ol>
+  <p class="hint">iPhone 的 Safari 和「加到主畫面」的圖示各自有一份清單。用捷徑加入的鏡頭會在 Safari 裡，所以請用 Safari 開這個網頁看。</p>
+  <h3>電腦</h3>
+  <ol>
+    <li>把這個按鈕拖到瀏覽器的書籤列：<a class="bookmarklet" id="bookmarklet" href="#">＋ 加入ライブカメラ</a></li>
+    <li>在 YouTube 直播頁面上點一下這個書籤，就會跳回這裡，按「✓ 加入」。</li>
+  </ol>
+</details>
 <nav class="tabs" id="tabs"></nav>
 <main class="grid" id="grid"></main>
 
@@ -277,7 +329,54 @@ $("form").addEventListener("submit", e => {
   cams.push({ name:$("f-name").value.trim(), group:$("f-group").value.trim(), type, url:r.url, note:$("f-note").value.trim() });
   save(); render(); dlg.close();
 });
+// ── 從分享選單、捷徑或書籤收到的鏡頭 ──
+const APP_URL = location.origin + location.pathname;
+$("ios-url").textContent = APP_URL + "?url=";
+$("bookmarklet").href = "javascript:location.href=" + JSON.stringify(APP_URL + "?url=") +
+  "+encodeURIComponent(location.href)+'&title='+encodeURIComponent(document.title.replace(/ - YouTube$/,''))";
+$("bookmarklet").addEventListener("click", e => { e.preventDefault(); });
+
+let pending = null;
+function showIncoming(){
+  const params = new URLSearchParams(location.search);
+  const blob = [params.get("url"), params.get("text"), params.get("title")].filter(Boolean).join(" ");
+  if (!blob) return;
+  const found = blob.match(/https?:\/\/[^\s"'<>]+/);
+  history.replaceState(null, "", location.pathname);           // 清掉網址參數，重新整理時不會再問一次
+  const box = $("incoming");
+  box.hidden = false;
+  if (!found) { $("in-error").textContent = "沒有收到網址，請再分享一次。"; $("in-ok").disabled = true; return; }
+  const r = parseInput(found[0]);
+  if (r.error) { $("in-error").textContent = r.error; $("in-ok").disabled = true; return; }
+  pending = r;
+  // 分享時的標題：Android 會放在 title 或網址前面的文字
+  let title = params.get("title") || blob.replace(found[0], "").trim();
+  title = title.replace(/ - YouTube$/, "").trim();
+  $("in-name").value = title.slice(0, 80);
+  $("in-group").value = r.type === "youtube" ? "我的最愛" : "";
+  $("groups-in").innerHTML = [...new Set(cams.map(c => c.group).filter(Boolean))].map(g => `<option value="${esc(g)}">`).join("");
+  $("in-preview").innerHTML = screenHTML({ ...r, name: title });
+  refreshImages();
+  if (!title && r.type === "youtube") {
+    fetch("https://noembed.com/embed?url=" + encodeURIComponent(r.url)).then(x => x.json())
+      .then(j => { if (j.title && !$("in-name").value) $("in-name").value = j.title.slice(0, 80); }).catch(() => {});
+  }
+  box.scrollIntoView({ block: "start" });
+}
+$("in-ok").onclick = () => {
+  if (!pending) return;
+  const name = $("in-name").value.trim() || "新的鏡頭";
+  const group = $("in-group").value.trim() || "我的最愛";
+  cams.push({ name, group, type: pending.type, url: pending.url, note: "" });
+  save(); filter = group; pending = null;
+  $("incoming").hidden = true; $("in-preview").innerHTML = "";
+  render();
+};
+$("in-cancel").onclick = () => { pending = null; $("incoming").hidden = true; $("in-preview").innerHTML = ""; };
+
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
 render();
+showIncoming();
 </script>
 </body>
 </html>
