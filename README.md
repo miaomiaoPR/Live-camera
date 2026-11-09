@@ -1,4 +1,7 @@
-# 我的ライブカメラ
+# 我的即時影像 / マイライブカメラ / My Live Cams
+
+介面支援繁體中文、日本語、English（右上角切換，第一次打開會依瀏覽器語言自動選擇）。
+UI available in Traditional Chinese, Japanese and English (switch at the top right).
 
 只顯示自己想看的公開即時影像（ライブカメラ）的單檔網頁 app。
 

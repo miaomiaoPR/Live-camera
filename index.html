@@ -3,20 +3,44 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>我的ライブカメラ</title>
-<link rel="manifest" href="manifest.webmanifest">
+<title>我的即時影像</title>
+<link rel="manifest" id="manifest" href="manifest.zh.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#1f6f8b">
+<script>
+// 在其他東西載入前決定語言，讓 <html lang>、標題與 manifest（Android 分享選單裡的名稱）一致
+(function(){
+  var ok = ["zh","ja","en"], lang = null;
+  try { lang = new URLSearchParams(location.search).get("lang"); } catch(e){}
+  if (ok.indexOf(lang) < 0) { try { lang = localStorage.getItem("livecams-lang"); } catch(e){} }
+  if (ok.indexOf(lang) < 0) {
+    var nav = (navigator.languages || [navigator.language || "en"]);
+    lang = "en";
+    for (var i = 0; i < nav.length; i++) {
+      var l = String(nav[i]).toLowerCase();
+      if (l.indexOf("ja") === 0) { lang = "ja"; break; }
+      if (l.indexOf("zh") === 0) { lang = "zh"; break; }
+      if (l.indexOf("en") === 0) { lang = "en"; break; }
+    }
+  }
+  window.INITIAL_LANG = lang;
+  document.documentElement.lang = { zh:"zh-Hant", ja:"ja", en:"en" }[lang];
+  document.getElementById("manifest").href = "manifest." + lang + ".webmanifest";
+})();
+</script>
 <style>
 /* 版面：頂部工具列 + 自適應鏡頭格（手機一欄、寬螢幕兩到三欄） */
 :root{
   --bg:#eef1f3; --panel:#ffffff; --fg:#1b2329; --muted:#5d6b75; --line:#d5dbe0;
   --accent:#1f6f8b; --live:#d6402f;
-  --sans:"Noto Sans TC","Noto Sans JP",system-ui,sans-serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --mono:ui-monospace,"SF Mono",Menlo,monospace;
   color-scheme:light;
 }
+/* 漢字字形依語言切換，避免日文頁面出現中文字形（反之亦然） */
+:root:lang(zh-Hant){--sans:"PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif}
+:root:lang(ja){--sans:"Hiragino Sans","Noto Sans JP","Yu Gothic UI","Meiryo",system-ui,sans-serif}
 @media (prefers-color-scheme:dark){:root{
   --bg:#12171b; --panel:#1b2228; --fg:#e4e9ec; --muted:#93a1ab; --line:#2c363e;
   --accent:#5fb3cf; --live:#ff6a57; color-scheme:dark}}
@@ -28,13 +52,20 @@ body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--sans);
 header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:16px}
 h1{font-size:1.35rem;margin:0;letter-spacing:.02em}
 .clock{font-family:var(--mono);color:var(--muted);font-size:.85rem;font-variant-numeric:tabular-nums}
+.head-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--fg);
   border-radius:8px;padding:6px 12px;cursor:pointer}
 button:hover{border-color:var(--accent)}
+button:disabled{opacity:.5;cursor:not-allowed}
 button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.langs{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.langs button{border:0;border-radius:0;padding:6px 10px;font-size:.85rem}
+.langs button+button{border-left:1px solid var(--line)}
+.langs button[aria-pressed="true"]{background:var(--accent);color:#fff}
 .tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
 .tabs button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
 .grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(min(100%,420px),1fr))}
+.empty{color:var(--muted);padding:24px 0}
 .cam{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
 .screen{position:relative;aspect-ratio:16/9;background:#000;max-width:100%}
 .screen iframe,.screen img{position:absolute;inset:0;width:100%;height:100%;border:0;object-fit:contain}
@@ -58,14 +89,14 @@ textarea{font:13px/1.4 var(--mono);padding:8px;border-radius:6px;border:1px soli
   border-radius:10px;padding:12px;margin-bottom:16px}
 .search input{flex:1 1 240px;min-width:0}
 .search .hint{flex-basis:100%;margin:0}
-.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chips .lbl{font-size:.8rem;color:var(--muted)}
 .chips button{font-size:.8rem;padding:4px 10px;border-radius:999px}
 .chips button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
-#f-error{color:var(--live)}
+#f-error,#in-error{color:var(--live)}
 #f-error:empty,#in-error:empty{display:none}
-#in-error{color:var(--live)}
-.incoming{background:var(--panel);border:2px solid var(--accent);border-radius:12px;padding:16px;margin-bottom:16px;
+.incoming{max-width:720px;background:var(--panel);border:2px solid var(--accent);border-radius:12px;padding:16px;margin-bottom:16px;
   display:flex;flex-direction:column;gap:12px;font-size:1.05rem}
 .incoming h2{margin:0;font-size:1.25rem}
 .incoming .screen{border-radius:8px;overflow:hidden}
@@ -83,161 +114,349 @@ details.help code{font-family:var(--mono);font-size:.8rem;background:var(--bg);p
 </head>
 <body>
 <header>
-  <h1>我的ライブカメラ</h1>
+  <h1 data-i="appName"></h1>
   <span class="clock" id="clock"></span>
-  <div style="display:flex;gap:8px">
-    <button id="addBtn" class="primary">＋ 新增鏡頭</button>
-    <button id="resetBtn" title="恢復預設清單">重設</button>
+  <div class="head-actions">
+    <div class="langs" id="langs" role="group" data-i-aria="language">
+      <button type="button" data-lang="zh" lang="zh-Hant">中文</button>
+      <button type="button" data-lang="ja" lang="ja">日本語</button>
+      <button type="button" data-lang="en" lang="en">English</button>
+    </div>
+    <button id="addBtn" class="primary" data-i="add"></button>
+    <button id="resetBtn" data-i="reset" data-i-title="resetTitle"></button>
   </div>
 </header>
+
 <form class="search" id="search">
-  <label for="q" class="sr">搜尋 YouTube 直播</label>
-  <input id="q" type="search" placeholder="想看哪裡？例如：京都 嵐山、Venice、Hawaii beach" autocomplete="off">
-  <div class="chips" id="suffix" role="group" aria-label="搜尋關鍵字">
-    <button type="button" data-s="live cam" aria-pressed="true">live cam</button>
-    <button type="button" data-s="ライブカメラ" aria-pressed="false">ライブカメラ</button>
-    <button type="button" data-s="即時影像" aria-pressed="false">即時影像</button>
+  <label for="q" class="sr" data-i="searchLabel"></label>
+  <input id="q" type="search" data-i-ph="searchPh" autocomplete="off">
+  <div class="chips" id="suffix" role="group" data-i-aria="searchLang">
+    <span class="lbl" data-i="searchLang"></span>
+    <button type="button" data-k="en" data-s="live cam"></button>
+    <button type="button" data-k="ja" data-s="ライブカメラ"></button>
+    <button type="button" data-k="zh" data-s="即時影像"></button>
   </div>
-  <button class="primary" type="submit">在 YouTube 搜尋直播 ↗</button>
-  <p class="hint">會在新分頁開啟 YouTube，只列出「正在直播」的影片。找到喜歡的，複製網址回來按「＋ 新增鏡頭」貼上。</p>
+  <button class="primary" type="submit" data-i="searchBtn"></button>
+  <p class="hint" data-i="searchHint"></p>
 </form>
+
 <section class="incoming" id="incoming" hidden aria-live="polite">
-  <h2>要加入這個鏡頭嗎？</h2>
+  <h2 data-i="inTitle"></h2>
   <div class="screen" id="in-preview"></div>
-  <label>名稱<input id="in-name"></label>
-  <label>分組<input id="in-group" list="groups-in" placeholder="例如：京都"><datalist id="groups-in"></datalist></label>
+  <label><span data-i="name"></span><input id="in-name"></label>
+  <label><span data-i="group"></span><input id="in-group" list="groups-in" data-i-ph="groupPh"><datalist id="groups-in"></datalist></label>
   <p class="hint" id="in-error" role="alert"></p>
   <div class="big">
-    <button class="primary" id="in-ok">✓ 加入</button>
-    <button id="in-cancel">不要</button>
+    <button class="primary" id="in-ok" data-i="inOk"></button>
+    <button id="in-cancel" data-i="inCancel"></button>
   </div>
 </section>
+
 <details class="help" id="help">
-  <summary>從 YouTube 一鍵加入的設定方法</summary>
-  <h3>Android 手機</h3>
-  <ol>
-    <li>用 Chrome 打開這個網頁，按右上角「⋮」→「安裝應用程式」或「加到主畫面」。</li>
-    <li>之後在 YouTube 看到喜歡的直播，按「分享」→ 選「ライブカメラ」。</li>
-    <li>這個 app 會打開，按大大的「✓ 加入」就完成。</li>
-  </ol>
-  <h3>iPhone（需要先設定一次捷徑）</h3>
-  <ol>
-    <li>打開「捷徑」app → 右上角「＋」新增捷徑，名稱取「加入ライブカメラ」。</li>
-    <li>按捷徑名稱旁的 ⓘ，打開「在分享表單中顯示」，接收類型只勾「URL」。</li>
-    <li>加入動作「URL 編碼」，對象選「捷徑輸入」。</li>
-    <li>加入動作「打開 URL」，網址輸入 <code id="ios-url"></code>，最後接上「URL 編碼後的文字」。</li>
-    <li>之後在 YouTube 按「分享」→「更多」→「加入ライブカメラ」，Safari 會打開這個網頁，按「✓ 加入」。</li>
-  </ol>
-  <p class="hint">iPhone 的 Safari 和「加到主畫面」的圖示各自有一份清單。用捷徑加入的鏡頭會在 Safari 裡，所以請用 Safari 開這個網頁看。</p>
-  <h3>電腦</h3>
-  <ol>
-    <li>把這個按鈕拖到瀏覽器的書籤列：<a class="bookmarklet" id="bookmarklet" href="#">＋ 加入ライブカメラ</a></li>
-    <li>在 YouTube 直播頁面上點一下這個書籤，就會跳回這裡，按「✓ 加入」。</li>
-  </ol>
+  <summary data-i="helpTitle"></summary>
+  <div id="help-body"></div>
 </details>
+
 <nav class="tabs" id="tabs"></nav>
 <main class="grid" id="grid"></main>
 
 <dialog id="dlg">
   <form id="form" method="dialog">
-    <strong>新增鏡頭</strong>
-    <label>網址或嵌入碼
-      <textarea id="f-url" required rows="3" placeholder="貼上 YouTube 網址、圖片網址、網頁網址，或 <iframe …> 嵌入碼"></textarea>
+    <strong data-i="dlgTitle"></strong>
+    <label><span data-i="urlLabel"></span>
+      <textarea id="f-url" required rows="3" data-i-ph="urlPh"></textarea>
     </label>
-    <p class="hint" id="f-detect">貼上後會自動判斷類型。</p>
-    <label>類型
+    <p class="hint" id="f-detect"></p>
+    <label><span data-i="type"></span>
       <select id="f-type">
-        <option value="youtube">YouTube 直播</option>
-        <option value="embed">嵌入碼（網站提供的 iframe）</option>
-        <option value="image">靜態圖片（每 5 分鐘更新）</option>
-        <option value="link">只放連結</option>
+        <option value="youtube" data-i="typeYoutube"></option>
+        <option value="embed" data-i="typeEmbed"></option>
+        <option value="image" data-i="typeImage"></option>
+        <option value="link" data-i="typeLink"></option>
       </select>
     </label>
-    <label>名稱<input id="f-name" required placeholder="例如：京都 嵐山 渡月橋"></label>
-    <label>分組<input id="f-group" list="groups" placeholder="例如：京都"><datalist id="groups"></datalist></label>
-    <label>說明（選填）<input id="f-note"></label>
+    <label><span data-i="name"></span><input id="f-name" required data-i-ph="namePh"></label>
+    <label><span data-i="group"></span><input id="f-group" list="groups" data-i-ph="groupPh"><datalist id="groups"></datalist></label>
+    <label><span data-i="note"></span><input id="f-note"></label>
     <p class="hint" id="f-error" role="alert"></p>
     <div class="actions">
-      <button value="cancel" formnovalidate>取消</button>
-      <button value="ok" class="primary">加入</button>
+      <button value="cancel" formnovalidate data-i="cancel"></button>
+      <button value="ok" class="primary" data-i="ok"></button>
     </div>
   </form>
 </dialog>
 
 <script>
-// 預設清單（2026-11 查到的公開來源）。YouTube 直播重開時影片 ID 會變，需更新。
-// type:"link" 是官方網站自己的播放器，無法內嵌，只放連結。
+// ───────────── 文字（三種語言） ─────────────
+// 規則：每個語言版本只用該語言；品牌名（YouTube、EarthCam 等）照原文。
+const I18N = {
+zh: {
+  appName:"我的即時影像", shareName:"即時影像", shortcutName:"加入即時影像",
+  language:"語言", add:"＋ 新增鏡頭", reset:"重設", resetTitle:"恢復預設清單",
+  clockTW:"台灣", clockJP:"日本", sep:" · ",
+  searchLabel:"搜尋 YouTube 直播", searchPh:"想看哪裡？例如：京都 嵐山、威尼斯、夏威夷 海灘",
+  searchLang:"搜尋語言", langNames:{ en:"英文", ja:"日文", zh:"中文" },
+  searchBtn:"在 YouTube 搜尋直播 ↗",
+  searchHint:"會在新分頁開啟 YouTube，只列出正在直播的影片。找到喜歡的，可以用下方的一鍵加入，或複製網址後按「＋ 新增鏡頭」。",
+  inTitle:"要加入這個鏡頭嗎？", name:"名稱", group:"分組", groupPh:"例如：京都",
+  inOk:"✓ 加入", inCancel:"不要", noUrl:"沒有收到網址，請再分享一次。", newCam:"新的鏡頭",
+  helpTitle:"從 YouTube 一鍵加入的設定方法",
+  help:`<h3>Android 手機</h3><ol>
+    <li>用 Chrome 打開這個網頁，按右上角「⋮」→「安裝應用程式」或「加到主畫面」。</li>
+    <li>之後在 YouTube 看到喜歡的直播，按「分享」→ 選「即時影像」。</li>
+    <li>這個 app 會打開，按大大的「✓ 加入」就完成。</li></ol>
+  <h3>iPhone（需要先設定一次捷徑）</h3><ol>
+    <li>打開「捷徑」app，按右上角「＋」新增捷徑，名稱取「加入即時影像」。</li>
+    <li>按捷徑名稱旁的 ⓘ，打開「在分享表單中顯示」，接收類型只勾「URL」。</li>
+    <li>加入動作「URL 編碼」，對象選「捷徑輸入」。</li>
+    <li>加入動作「打開 URL」，網址輸入 {code}，最後接上「URL 編碼後的文字」。</li>
+    <li>之後在 YouTube 按「分享」→「更多」→「加入即時影像」，Safari 會打開這個網頁，按「✓ 加入」。</li></ol>
+  <p class="hint">iPhone 的 Safari 和「加到主畫面」的圖示各自保存一份清單。用捷徑加入的鏡頭會在 Safari 裡，所以請用 Safari 打開這個網頁觀看。</p>
+  <h3>電腦</h3><ol>
+    <li>把這個按鈕拖到瀏覽器的書籤列：{bm}</li>
+    <li>在 YouTube 直播頁面點一下這個書籤，就會跳回這裡，按「✓ 加入」。</li></ol>`,
+  bookmarklet:"＋ 加入即時影像",
+  dlgTitle:"新增鏡頭", urlLabel:"網址或嵌入碼", urlPh:"貼上 YouTube 網址、圖片網址、網頁網址，或 <iframe …> 嵌入碼",
+  detectIdle:"貼上後會自動判斷類型。", detected:"判斷為：", embedUrl:"（網址：{u}）",
+  type:"類型", typeYoutube:"YouTube 直播", typeEmbed:"嵌入碼（網站提供的 iframe）",
+  typeImage:"靜態圖片（每 5 分鐘更新）", typeLink:"只放連結",
+  typeShort:{ youtube:"YouTube 直播", embed:"嵌入碼", image:"靜態圖片", link:"只放連結" },
+  namePh:"例如：京都 嵐山 渡月橋", note:"說明（選填）", cancel:"取消", ok:"加入",
+  errNoSrc:"嵌入碼裡找不到 src 網址，請確認貼上的是完整的 <iframe …> 程式碼。",
+  errHttps:"嵌入碼的網址必須是 https:// 開頭。",
+  errInput:"請貼上 https:// 開頭的網址或 <iframe> 嵌入碼。",
+  errYoutube:"這不是 YouTube 影片網址，請改選其他類型。",
+  open:"開啟原始頁面 ↗", remove:"移除", linkOnly:"這個鏡頭要在官方網站觀看<br>請點下方「開啟原始頁面」",
+  empty:"這裡還沒有鏡頭。按「＋ 新增鏡頭」就能加入。",
+  groups:{ all:"全部", none:"未分組", fav:"我的最愛", fuji:"富士山", world:"世界" },
+  cams:{
+    kawaguchiko:["富士山 河口湖站前","24 小時直播"],
+    fujiview:["富士景觀飯店（河口湖畔）","24 小時直播"],
+    yamanaka:["山中湖 芙蓉台","約 30 秒延遲"],
+    fujiyama:["FUJIYAMA 觀景塔（富士急樂園）","展望台視角"],
+    summit:["富士山頂 劍峰","只在夏季開山期間直播"],
+    fujirice:["FUJI RICE 富士宮稻田","頻道直播頁"],
+    shibuya:["澀谷十字路口","SkylineWebcams · 東京"],
+    times:["紐約時代廣場","EarthCam · 紐約"],
+    abbey:["艾比路斑馬線","EarthCam · 倫敦"],
+    jackson:["傑克森霍爾 小鎮廣場","SeeJH · 美國懷俄明州"],
+    utsjoki:["北極光（芬蘭 烏茨約基）","SkylineWebcams · 芬蘭拉普蘭，冬季夜間"],
+    auroramax:["AuroraMAX 北極光","加拿大 黃刀鎮，冬季夜間"],
+  },
+},
+ja: {
+  appName:"マイライブカメラ", shareName:"ライブカメラ", shortcutName:"ライブカメラに追加",
+  language:"言語", add:"＋ カメラを追加", reset:"リセット", resetTitle:"初期リストに戻す",
+  clockTW:"台湾", clockJP:"日本", sep:"・",
+  searchLabel:"YouTube のライブ配信を検索", searchPh:"どこを見たい？ 例：京都 嵐山、ベネチア、ハワイ ビーチ",
+  searchLang:"検索する言語", langNames:{ en:"英語", ja:"日本語", zh:"中国語" },
+  searchBtn:"YouTube でライブを検索 ↗",
+  searchHint:"新しいタブで YouTube を開き、配信中の動画だけを表示します。気に入ったものは下の方法でワンタップ追加するか、URL をコピーして「＋ カメラを追加」に貼り付けてください。",
+  inTitle:"このカメラを追加しますか？", name:"名前", group:"グループ", groupPh:"例：京都",
+  inOk:"✓ 追加する", inCancel:"やめる", noUrl:"URL を受け取れませんでした。もう一度共有してください。", newCam:"新しいカメラ",
+  helpTitle:"YouTube からワンタップで追加する方法",
+  help:`<h3>Android</h3><ol>
+    <li>Chrome でこのページを開き、右上の「⋮」→「アプリをインストール」または「ホーム画面に追加」をタップします。</li>
+    <li>YouTube で気に入ったライブを見つけたら、「共有」→「ライブカメラ」を選びます。</li>
+    <li>このアプリが開くので、大きな「✓ 追加する」をタップすれば完了です。</li></ol>
+  <h3>iPhone（最初に一度だけショートカットの設定が必要）</h3><ol>
+    <li>「ショートカット」アプリを開き、右上の「＋」で新規作成します。名前は「ライブカメラに追加」にします。</li>
+    <li>名前の横の ⓘ をタップし、「共有シートに表示」をオンにして、受け取る種類は「URL」だけにします。</li>
+    <li>アクション「URLエンコード」を追加し、対象を「ショートカットの入力」にします。</li>
+    <li>アクション「URLを開く」を追加し、URL に {code} と入力して、最後に「URLエンコードされたテキスト」をつなげます。</li>
+    <li>以後は YouTube で「共有」→「その他」→「ライブカメラに追加」を選ぶと、Safari でこのページが開きます。「✓ 追加する」をタップしてください。</li></ol>
+  <p class="hint">iPhone では、Safari と「ホーム画面に追加」したアイコンでリストが別々に保存されます。ショートカットで追加したカメラは Safari 側に入るので、Safari でこのページを開いてください。</p>
+  <h3>パソコン</h3><ol>
+    <li>このボタンをブラウザのブックマークバーにドラッグします：{bm}</li>
+    <li>YouTube のライブページでこのブックマークをクリックすると、このページに戻ります。「✓ 追加する」をクリックしてください。</li></ol>`,
+  bookmarklet:"＋ ライブカメラに追加",
+  dlgTitle:"カメラを追加", urlLabel:"URL または埋め込みコード", urlPh:"YouTube の URL、画像の URL、ページの URL、または <iframe …> 埋め込みコードを貼り付け",
+  detectIdle:"貼り付けると種類を自動で判別します。", detected:"判別結果：", embedUrl:"（URL：{u}）",
+  type:"種類", typeYoutube:"YouTube ライブ", typeEmbed:"埋め込みコード（サイト提供の iframe）",
+  typeImage:"静止画（5 分ごとに更新）", typeLink:"リンクのみ",
+  typeShort:{ youtube:"YouTube ライブ", embed:"埋め込みコード", image:"静止画", link:"リンクのみ" },
+  namePh:"例：京都 嵐山 渡月橋", note:"メモ（任意）", cancel:"キャンセル", ok:"追加",
+  errNoSrc:"埋め込みコードに src の URL が見つかりません。<iframe …> のコードを最後まで貼り付けたか確認してください。",
+  errHttps:"埋め込みコードの URL は https:// で始まる必要があります。",
+  errInput:"https:// で始まる URL か、<iframe> 埋め込みコードを貼り付けてください。",
+  errYoutube:"YouTube の動画 URL ではありません。別の種類を選んでください。",
+  open:"元のページを開く ↗", remove:"削除", linkOnly:"このカメラは公式サイトで見られます<br>下の「元のページを開く」をタップしてください",
+  empty:"まだカメラがありません。「＋ カメラを追加」から追加できます。",
+  groups:{ all:"すべて", none:"未分類", fav:"お気に入り", fuji:"富士山", world:"世界" },
+  cams:{
+    kawaguchiko:["富士山 河口湖駅前","24 時間配信"],
+    fujiview:["富士ビューホテル（河口湖畔）","24 時間配信"],
+    yamanaka:["山中湖 芙蓉台","約 30 秒遅れ"],
+    fujiyama:["FUJIYAMAタワー（富士急ハイランド）","展望台からの眺め"],
+    summit:["富士山頂 剣ヶ峰","夏の開山期間のみ配信"],
+    fujirice:["FUJI RICE 富士宮の田んぼ","チャンネルのライブページ"],
+    shibuya:["渋谷スクランブル交差点","SkylineWebcams・東京"],
+    times:["タイムズスクエア","EarthCam・ニューヨーク"],
+    abbey:["アビー・ロードの横断歩道","EarthCam・ロンドン"],
+    jackson:["ジャクソンホール タウンスクエア","SeeJH・アメリカ ワイオミング州"],
+    utsjoki:["オーロラ（フィンランド ウツヨキ）","SkylineWebcams・フィンランド ラップランド、冬の夜間"],
+    auroramax:["AuroraMAX オーロラ","カナダ イエローナイフ、冬の夜間"],
+  },
+},
+en: {
+  appName:"My Live Cams", shareName:"Live Cams", shortcutName:"Add to Live Cams",
+  language:"Language", add:"+ Add camera", reset:"Reset", resetTitle:"Restore the default list",
+  clockTW:"Taiwan", clockJP:"Japan", sep:" · ",
+  searchLabel:"Search YouTube live streams", searchPh:"Where to? e.g. Kyoto Arashiyama, Venice, Hawaii beach",
+  searchLang:"Search language", langNames:{ en:"English", ja:"Japanese", zh:"Chinese" },
+  searchBtn:"Search live on YouTube ↗",
+  searchHint:"Opens YouTube in a new tab and shows only streams that are live now. Add one with one tap (see below), or copy its link and use “+ Add camera”.",
+  inTitle:"Add this camera?", name:"Name", group:"Group", groupPh:"e.g. Kyoto",
+  inOk:"✓ Add", inCancel:"No thanks", noUrl:"No link was received. Please share it again.", newCam:"New camera",
+  helpTitle:"How to add from YouTube with one tap",
+  help:`<h3>Android</h3><ol>
+    <li>Open this page in Chrome, then tap “⋮” at the top right → “Install app” or “Add to Home screen”.</li>
+    <li>When you find a live stream on YouTube, tap “Share” → “Live Cams”.</li>
+    <li>This app opens. Tap the big “✓ Add” button and you’re done.</li></ol>
+  <h3>iPhone (set up a shortcut once)</h3><ol>
+    <li>Open the Shortcuts app and tap “+” at the top right. Name the shortcut “Add to Live Cams”.</li>
+    <li>Tap ⓘ next to the name, turn on “Show in Share Sheet”, and accept only “URLs”.</li>
+    <li>Add the “URL Encode” action and set it to “Shortcut Input”.</li>
+    <li>Add the “Open URLs” action, type {code} as the URL, then append “URL Encoded Text”.</li>
+    <li>From then on, in YouTube tap “Share” → “More” → “Add to Live Cams”. Safari opens this page; tap “✓ Add”.</li></ol>
+  <p class="hint">On iPhone, Safari and the Home Screen icon keep separate lists. Cameras added with the shortcut go into Safari, so open this page in Safari to watch them.</p>
+  <h3>Computer</h3><ol>
+    <li>Drag this button to your browser’s bookmarks bar: {bm}</li>
+    <li>On a YouTube live page, click the bookmark. You’ll come back here; click “✓ Add”.</li></ol>`,
+  bookmarklet:"+ Add to Live Cams",
+  dlgTitle:"Add camera", urlLabel:"Link or embed code", urlPh:"Paste a YouTube link, an image URL, a web page URL, or <iframe …> embed code",
+  detectIdle:"The type is detected automatically when you paste.", detected:"Detected: ", embedUrl:" (URL: {u})",
+  type:"Type", typeYoutube:"YouTube live", typeEmbed:"Embed code (iframe from the site)",
+  typeImage:"Still image (refreshes every 5 min)", typeLink:"Link only",
+  typeShort:{ youtube:"YouTube live", embed:"Embed code", image:"Still image", link:"Link only" },
+  namePh:"e.g. Kyoto Arashiyama Togetsukyo Bridge", note:"Note (optional)", cancel:"Cancel", ok:"Add",
+  errNoSrc:"No src URL was found in the embed code. Make sure you pasted the whole <iframe …> code.",
+  errHttps:"The embed code’s URL must start with https://.",
+  errInput:"Paste a link that starts with https:// or an <iframe> embed code.",
+  errYoutube:"This isn’t a YouTube video link. Choose another type.",
+  open:"Open source page ↗", remove:"Remove", linkOnly:"This camera plays on its official site<br>Tap “Open source page” below",
+  empty:"No cameras here yet. Use “+ Add camera” to add one.",
+  groups:{ all:"All", none:"Ungrouped", fav:"Favorites", fuji:"Mt. Fuji", world:"World" },
+  cams:{
+    kawaguchiko:["Mt. Fuji from Kawaguchiko Station","Streaming 24/7"],
+    fujiview:["Fuji View Hotel (Lake Kawaguchi)","Streaming 24/7"],
+    yamanaka:["Lake Yamanaka, Fuyodai","About 30 s delay"],
+    fujiyama:["FUJIYAMA Tower (Fuji-Q Highland)","View from the observation deck"],
+    summit:["Mt. Fuji summit (Kengamine)","Summer climbing season only"],
+    fujirice:["FUJI RICE paddies, Fujinomiya","Channel live page"],
+    shibuya:["Shibuya Scramble Crossing","SkylineWebcams · Tokyo"],
+    times:["Times Square","EarthCam · New York"],
+    abbey:["Abbey Road Crossing","EarthCam · London"],
+    jackson:["Jackson Hole Town Square","SeeJH · Wyoming, USA"],
+    utsjoki:["Northern Lights, Utsjoki","SkylineWebcams · Finnish Lapland, winter nights"],
+    auroramax:["AuroraMAX Northern Lights","Yellowknife, Canada, winter nights"],
+  },
+},
+};
+
+// ───────────── 預設鏡頭（名稱與說明依語言顯示） ─────────────
+// 2026-11 查到的公開來源。YouTube 直播重開時影片 ID 會變，需更新。
+// type:"link" 是官方網站自己的播放器，無法內嵌。分組以 "@key" 儲存，顯示時翻譯。
 const DEFAULTS = [
-  { group:"富士山", name:"富士山 河口湖駅前", type:"youtube",
-    url:"https://www.youtube.com/watch?v=1Lri-i1mVYI", note:"24 小時配信" },
-  { group:"富士山", name:"富士ビューホテル（河口湖畔）", type:"youtube",
-    url:"https://www.youtube.com/watch?v=6sin2Z5WM3I", note:"24 小時配信" },
-  { group:"富士山", name:"山中湖 芙蓉台", type:"youtube",
-    url:"https://www.youtube.com/watch?v=WjVH-0qSwOw", note:"約 30 秒延遲" },
-  { group:"富士山", name:"FUJIYAMAタワー（富士急ハイランド）", type:"youtube",
-    url:"https://www.youtube.com/watch?v=_6nLps25Kws", note:"展望台視角" },
-  { group:"富士山", name:"富士山頂 剣ヶ峰", type:"link",
-    url:"https://www.fujisan-climb.jp/livecamera/", note:"只在夏季開山期配信" },
-  { group:"富士山", name:"FUJI RICE 富士宮の田んぼ", type:"link",
-    url:"https://www.youtube.com/@fujirice_official/live", note:"頻道直播頁" },
-  { group:"世界", name:"渋谷スクランブル交差点", type:"link",
-    url:"https://www.skylinewebcams.com/webcam/japan/kanto/tokyo/tokyo-shibuya-scramble-crossing.html", note:"SkylineWebcams・東京" },
-  { group:"世界", name:"Times Square", type:"link",
-    url:"https://www.earthcam.com/usa/newyork/timessquare/", note:"EarthCam・紐約" },
-  { group:"世界", name:"Abbey Road 斑馬線", type:"link",
-    url:"https://www.earthcam.com/world/england/london/abbeyroad/", note:"EarthCam・倫敦" },
-  { group:"世界", name:"Jackson Hole Town Square", type:"link",
-    url:"https://www.seejh.com/live", note:"SeeJH・美國懷俄明州" },
-  { group:"世界", name:"北極光 Utsjoki", type:"link",
-    url:"https://www.skylinewebcams.com/webcam/finland/lapland/utsjoki/northern-lights.html", note:"SkylineWebcams・芬蘭拉普蘭，冬季夜間" },
-  { group:"世界", name:"AuroraMAX 北極光", type:"link",
-    url:"https://auroramax.com/live", note:"加拿大 Yellowknife，冬季夜間" },
+  { id:"kawaguchiko", group:"@fuji",  type:"youtube", url:"https://www.youtube.com/watch?v=1Lri-i1mVYI" },
+  { id:"fujiview",    group:"@fuji",  type:"youtube", url:"https://www.youtube.com/watch?v=6sin2Z5WM3I" },
+  { id:"yamanaka",    group:"@fuji",  type:"youtube", url:"https://www.youtube.com/watch?v=WjVH-0qSwOw" },
+  { id:"fujiyama",    group:"@fuji",  type:"youtube", url:"https://www.youtube.com/watch?v=_6nLps25Kws" },
+  { id:"summit",      group:"@fuji",  type:"link",    url:"https://www.fujisan-climb.jp/livecamera/" },
+  { id:"fujirice",    group:"@fuji",  type:"link",    url:"https://www.youtube.com/@fujirice_official/live" },
+  { id:"shibuya",     group:"@world", type:"link",    url:"https://www.skylinewebcams.com/webcam/japan/kanto/tokyo/tokyo-shibuya-scramble-crossing.html" },
+  { id:"times",       group:"@world", type:"link",    url:"https://www.earthcam.com/usa/newyork/timessquare/" },
+  { id:"abbey",       group:"@world", type:"link",    url:"https://www.earthcam.com/world/england/london/abbeyroad/" },
+  { id:"jackson",     group:"@world", type:"link",    url:"https://www.seejh.com/live" },
+  { id:"utsjoki",     group:"@world", type:"link",    url:"https://www.skylinewebcams.com/webcam/finland/lapland/utsjoki/northern-lights.html" },
+  { id:"auroramax",   group:"@world", type:"link",    url:"https://auroramax.com/live" },
 ];
-const KEY = "my-livecams-v1";
-const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || DEFAULTS.slice(); } catch { return DEFAULTS.slice(); } };
+const GROUP_KEYS = ["fav","fuji","world"];
+
+// ───────────── 儲存（v2：預設鏡頭與內建分組以代號儲存） ─────────────
+const KEY = "my-livecams-v2", OLD_KEY = "my-livecams-v1", LANG_KEY = "livecams-lang";
+const copyDefaults = () => DEFAULTS.map(c => ({ ...c }));
+// 把任何語言寫的內建分組名稱轉成代號，避免切換語言後出現別的語言的分組
+function groupToKey(g){
+  const v = String(g || "").trim();
+  if (!v) return "";
+  if (v.startsWith("@")) return v;
+  for (const k of GROUP_KEYS) for (const l in I18N) if (I18N[l].groups[k] === v) return "@" + k;
+  return v;
+}
+function migrate(list){
+  return list.map(c => {
+    const d = DEFAULTS.find(x => x.url === c.url && !c.id);
+    if (d) return { ...d };
+    return { ...c, group: groupToKey(c.group) };
+  });
+}
+function load(){
+  try {
+    const v2 = localStorage.getItem(KEY);
+    if (v2) return JSON.parse(v2);
+    const v1 = localStorage.getItem(OLD_KEY);
+    if (v1) { const m = migrate(JSON.parse(v1)); localStorage.setItem(KEY, JSON.stringify(m)); return m; }
+  } catch {}
+  return copyDefaults();
+}
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify(cams)); } catch {} };
 let cams = load();
-let filter = "全部";
+let filter = "*";                       // "*" = 全部；其餘為儲存的分組值
+let lang = window.INITIAL_LANG || "en";
+const T = () => I18N[lang];
+
+// ───────────── 顯示用工具 ─────────────
+const $ = id => document.getElementById(id);
+function esc(s){ return String(s||"").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+const camName  = c => c.id && T().cams[c.id] ? T().cams[c.id][0] : c.name;
+const camNote  = c => c.id && T().cams[c.id] ? T().cams[c.id][1] : c.note;
+const groupName = g => !g ? T().groups.none : g.startsWith("@") ? (T().groups[g.slice(1)] || g.slice(1)) : g;
+function groupOptions(){
+  const vals = new Set(["@fav", ...cams.map(c => c.group).filter(Boolean)]);
+  return [...vals].map(g => `<option value="${esc(groupName(g))}">`).join("");
+}
 
 function ytId(u){
   const m = u.match(/(?:v=|youtu\.be\/|\/live\/|\/embed\/)([\w-]{11})(?![\w-])/);
   return m && m[1] !== "live_stream" ? m[1] : null;
 }
-function esc(s){ return String(s||"").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 
 function screenHTML(c){
+  const title = esc(camName(c) || "");
   if (c.type === "youtube"){
     const id = ytId(c.url);
-    if (id) return `<span class="badge">LIVE</span><iframe src="https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&playsinline=1" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen loading="lazy" title="${esc(c.name)}"></iframe>`;
-    // 頻道直播網址：https://www.youtube.com/channel/UCxxxx → 嵌入頻道目前的直播
+    if (id) return `<span class="badge">LIVE</span><iframe src="https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&playsinline=1&hl=${lang === "zh" ? "zh-TW" : lang}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen loading="lazy" title="${title}"></iframe>`;
     const ch = c.url.match(/channel\/(UC[\w-]+)/);
-    if (ch) return `<span class="badge">LIVE</span><iframe src="https://www.youtube-nocookie.com/embed/live_stream?channel=${ch[1]}&autoplay=1&mute=1" allow="autoplay; encrypted-media; fullscreen" allowfullscreen loading="lazy"></iframe>`;
+    if (ch) return `<span class="badge">LIVE</span><iframe src="https://www.youtube-nocookie.com/embed/live_stream?channel=${ch[1]}&autoplay=1&mute=1" allow="autoplay; encrypted-media; fullscreen" allowfullscreen loading="lazy" title="${title}"></iframe>`;
   }
   if (c.type === "embed" && /^https:\/\//.test(c.url))
-    return `<iframe src="${esc(c.url)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" loading="lazy" title="${esc(c.name)}"></iframe>`;
-  if (c.type === "image") return `<img data-src="${esc(c.url)}" alt="${esc(c.name)}">`;
-  return `<div class="linkonly">這個鏡頭要在官方網站觀看<br>點下方「開啟原始頁面」</div>`;
+    return `<iframe src="${esc(c.url)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" loading="lazy" title="${title}"></iframe>`;
+  if (c.type === "image") return `<img data-src="${esc(c.url)}" alt="${title}">`;
+  return `<div class="linkonly">${T().linkOnly}</div>`;
 }
 
 function render(){
-  const groups = ["全部", ...new Set(cams.map(c => c.group || "未分組"))];
-  if (!groups.includes(filter)) filter = "全部";
-  document.getElementById("tabs").innerHTML = groups.map(g =>
-    `<button aria-pressed="${g===filter}" data-g="${esc(g)}">${esc(g)}</button>`).join("");
-  document.getElementById("grid").innerHTML = cams.map((c,i) => ({c,i}))
-    .filter(({c}) => filter==="全部" || (c.group||"未分組")===filter)
-    .map(({c,i}) => `
+  const groups = ["*", ...new Set(cams.map(c => c.group || ""))];
+  if (!groups.includes(filter)) filter = "*";
+  $("tabs").innerHTML = groups.map((g,i) =>
+    `<button aria-pressed="${g===filter}" data-gi="${i}">${esc(g === "*" ? T().groups.all : groupName(g))}</button>`).join("");
+  $("tabs").dataset.groups = JSON.stringify(groups);
+  const shown = cams.map((c,i) => ({c,i})).filter(({c}) => filter==="*" || (c.group||"")===filter);
+  $("grid").innerHTML = shown.length ? shown.map(({c,i}) => {
+    const note = camNote(c);
+    return `
     <article class="cam">
       <div class="screen">${screenHTML(c)}</div>
       <div class="meta">
-        <h2>${esc(c.name)}</h2>
-        <span class="sub">${esc(c.group||"")}${c.note ? "・"+esc(c.note) : ""}</span>
+        <h2>${esc(camName(c))}</h2>
+        <span class="sub">${esc(groupName(c.group))}${note ? esc(T().sep + note) : ""}</span>
         <div class="row">
-          <a href="${esc(c.url)}" target="_blank" rel="noopener">開啟原始頁面 ↗</a>
-          <button class="del" data-i="${i}">移除</button>
+          <a href="${esc(c.url)}" target="_blank" rel="noopener">${T().open}</a>
+          <button class="del" data-i="${i}">${T().remove}</button>
         </div>
       </div>
-    </article>`).join("");
+    </article>`; }).join("") : `<p class="empty">${esc(T().empty)}</p>`;
   refreshImages();
 }
 function refreshImages(){
@@ -247,128 +466,163 @@ function refreshImages(){
   });
 }
 setInterval(refreshImages, 5*60*1000);
-setInterval(() => { document.getElementById("clock").textContent =
-  "台灣 " + new Date().toLocaleTimeString("zh-TW",{timeZone:"Asia/Taipei",hour12:false}) +
-  "　日本 " + new Date().toLocaleTimeString("ja-JP",{timeZone:"Asia/Tokyo",hour12:false}); }, 1000);
+function tick(){
+  const now = new Date(), loc = { zh:"zh-TW", ja:"ja-JP", en:"en-GB" }[lang];
+  const f = tz => now.toLocaleTimeString(loc, { timeZone:tz, hour12:false });
+  $("clock").textContent = `${T().clockTW} ${f("Asia/Taipei")}${lang === "en" ? "  " : "　"}${T().clockJP} ${f("Asia/Tokyo")}`;
+}
+setInterval(tick, 1000);
 
-document.getElementById("tabs").onclick = e => { const g = e.target.dataset.g; if (g){ filter = g; render(); } };
-document.getElementById("grid").onclick = e => { const i = e.target.dataset.i; if (i !== undefined){ cams.splice(+i,1); save(); render(); } };
-document.getElementById("resetBtn").onclick = () => { cams = DEFAULTS.slice(); save(); render(); };
-// ── YouTube 搜尋：開新分頁，套用「直播中」篩選 ──
-const suffixBox = document.getElementById("suffix");
-suffixBox.onclick = e => {
-  const b = e.target.closest("button"); if (!b) return;
-  suffixBox.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+// ───────────── 套用語言 ─────────────
+const APP_URL = location.origin + location.pathname;
+function applyLang(){
+  const t = T();
+  document.documentElement.lang = { zh:"zh-Hant", ja:"ja", en:"en" }[lang];
+  document.title = t.appName;
+  $("manifest").href = "manifest." + lang + ".webmanifest";
+  document.querySelectorAll("[data-i]").forEach(el => { el.textContent = t[el.dataset.i]; });
+  document.querySelectorAll("[data-i-ph]").forEach(el => { el.placeholder = t[el.dataset.iPh]; });
+  document.querySelectorAll("[data-i-title]").forEach(el => { el.title = t[el.dataset.iTitle]; });
+  document.querySelectorAll("[data-i-aria]").forEach(el => { el.setAttribute("aria-label", t[el.dataset.iAria]); });
+  document.querySelectorAll("#langs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.lang === lang));
+  document.querySelectorAll("#suffix button").forEach(b => { b.textContent = t.langNames[b.dataset.k]; });
+  // 搜尋語言預設跟著介面語言
+  document.querySelectorAll("#suffix button").forEach(b => b.setAttribute("aria-pressed", b.dataset.k === lang));
+  // 說明：插入 iPhone 用網址與電腦用書籤
+  $("help-body").innerHTML = t.help
+    .replace("{code}", `<code id="ios-url"></code>`)
+    .replace("{bm}", `<a class="bookmarklet" id="bookmarklet" href="#"></a>`);
+  $("ios-url").textContent = APP_URL + "?url=";
+  const bm = $("bookmarklet");
+  bm.textContent = t.bookmarklet;
+  bm.href = "javascript:location.href=" + JSON.stringify(APP_URL + "?url=") +
+    "+encodeURIComponent(location.href)+'&title='+encodeURIComponent(document.title.replace(/ - YouTube$/,''))";
+  bm.addEventListener("click", e => e.preventDefault());
+  if ($("dlg").open) updateDetect();
+  if (!$("incoming").hidden && pending) {
+    $("groups-in").innerHTML = groupOptions();
+    if (pendingGroup) $("in-group").value = groupName(pendingGroup);
+    $("in-preview").innerHTML = screenHTML({ ...pending, name: $("in-name").value });
+  } else if (!$("incoming").hidden && incomingError) {
+    $("in-error").textContent = t[incomingError];
+  }
+  tick();
+  render();
+}
+$("langs").onclick = e => {
+  const b = e.target.closest("button[data-lang]"); if (!b) return;
+  lang = b.dataset.lang;
+  try { localStorage.setItem(LANG_KEY, lang); } catch {}
+  applyLang();
 };
-document.getElementById("search").addEventListener("submit", e => {
+
+// ───────────── 分組、移除、重設 ─────────────
+$("tabs").onclick = e => {
+  const b = e.target.closest("button[data-gi]"); if (!b) return;
+  filter = JSON.parse($("tabs").dataset.groups)[+b.dataset.gi]; render();
+};
+$("grid").onclick = e => { const i = e.target.dataset.i; if (i !== undefined){ cams.splice(+i,1); save(); render(); } };
+$("resetBtn").onclick = () => { cams = copyDefaults(); save(); render(); };
+
+// ───────────── YouTube 搜尋：開新分頁，只列出直播中 ─────────────
+$("suffix").onclick = e => {
+  const b = e.target.closest("button"); if (!b) return;
+  $("suffix").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+};
+$("search").addEventListener("submit", e => {
   e.preventDefault();
-  const q = document.getElementById("q").value.trim();
-  const s = suffixBox.querySelector('[aria-pressed="true"]')?.dataset.s || "";
+  const q = $("q").value.trim();
+  const s = $("suffix").querySelector('[aria-pressed="true"]')?.dataset.s || "";
   const query = [q, s].filter(Boolean).join(" ");
   const url = "https://www.youtube.com/results?search_query=" + encodeURIComponent(query) + "&sp=EgJAAQ%253D%253D";
   const a = Object.assign(document.createElement("a"), { href:url, target:"_blank", rel:"noopener" });
   document.body.appendChild(a); a.click(); a.remove();
 });
 
-// ── 新增鏡頭：自動判斷貼上的內容 ──
-const $ = id => document.getElementById(id);
+// ───────────── 新增鏡頭：自動判斷貼上的內容 ─────────────
 const dlg = $("dlg");
-
-// 從貼上的文字判斷類型，回傳 { type, url } 或 { error }
+// 回傳 { type, url } 或 { error: 錯誤代號 }
 function parseInput(raw){
   const t = raw.trim();
   if (/<iframe/i.test(t)){
     const f = new DOMParser().parseFromString(t, "text/html").querySelector("iframe");
     const src = (f?.getAttribute("src") || "").replace(/^\/\//, "https://");
-    if (!src) return { error:"嵌入碼裡找不到 src 網址，請確認貼上的是完整的 <iframe …> 程式碼。" };
-    if (!/^https:\/\//.test(src)) return { error:"嵌入碼的網址必須是 https:// 開頭。" };
+    if (!src) return { error:"errNoSrc" };
+    if (!/^https:\/\//.test(src)) return { error:"errHttps" };
     if (ytId(src)) return { type:"youtube", url:"https://www.youtube.com/watch?v=" + ytId(src) };
     return { type:"embed", url:src };
   }
-  if (!/^https?:\/\//.test(t)) return { error:"請貼上 https:// 開頭的網址或 <iframe> 嵌入碼。" };
+  if (!/^https?:\/\//.test(t)) return { error:"errInput" };
   if (/youtube\.com|youtu\.be/.test(t) && (ytId(t) || /channel\/UC/.test(t))) return { type:"youtube", url:t };
   if (/\.(jpe?g|png|gif|webp)(\?|$)/i.test(t)) return { type:"image", url:t };
   return { type:"link", url:t };
 }
-const typeLabel = { youtube:"YouTube 直播", embed:"嵌入碼", image:"靜態圖片", link:"只放連結" };
-
-$("f-url").addEventListener("input", async () => {
-  const raw = $("f-url").value;
-  if (!raw.trim()) { $("f-detect").textContent = "貼上後會自動判斷類型。"; return; }
+function fetchTitle(url, input){
+  fetch("https://noembed.com/embed?url=" + encodeURIComponent(url)).then(x => x.json())
+    .then(j => { if (j.title && !input.value) input.value = j.title.slice(0, 80); }).catch(() => {});
+}
+function updateDetect(setType){
+  const t = T(), raw = $("f-url").value;
+  if (!raw.trim()) { $("f-detect").textContent = t.detectIdle; return null; }
   const r = parseInput(raw);
-  if (r.error) { $("f-detect").textContent = r.error; return; }
-  $("f-type").value = r.type;
-  $("f-detect").textContent = "判斷為：" + typeLabel[r.type] + (r.type === "embed" ? "（網址：" + r.url + "）" : "");
-  // YouTube 影片：嘗試自動帶入標題（失敗就讓使用者自己填）
-  if (r.type === "youtube" && !$("f-name").value) {
-    try {
-      const res = await fetch("https://noembed.com/embed?url=" + encodeURIComponent(r.url));
-      const j = await res.json();
-      if (j.title && !$("f-name").value) $("f-name").value = j.title.slice(0, 80);
-    } catch {}
-  }
+  if (r.error) { $("f-detect").textContent = t[r.error]; return null; }
+  if (setType) $("f-type").value = r.type;
+  $("f-detect").textContent = t.detected + t.typeShort[r.type] + (r.type === "embed" ? t.embedUrl.replace("{u}", r.url) : "");
+  return r;
+}
+$("f-url").addEventListener("input", () => {
+  const r = updateDetect(true);
+  if (r && r.type === "youtube" && !$("f-name").value) fetchTitle(r.url, $("f-name"));
 });
-
 $("addBtn").onclick = () => {
   $("form").reset();
   $("f-error").textContent = "";
-  $("f-detect").textContent = "貼上後會自動判斷類型。";
-  $("f-group").value = filter === "全部" ? "" : filter;
-  $("groups").innerHTML = [...new Set(cams.map(c => c.group).filter(Boolean))].map(g => `<option value="${esc(g)}">`).join("");
+  updateDetect();
+  $("f-group").value = filter === "*" ? "" : groupName(filter);
+  $("groups").innerHTML = groupOptions();
   dlg.showModal();
 };
 $("form").addEventListener("submit", e => {
   if (e.submitter?.value !== "ok") return;          // 取消：直接關閉
   e.preventDefault();
-  const r = parseInput($("f-url").value);
-  if (r.error) { $("f-error").textContent = r.error; return; }
+  const t = T(), r = parseInput($("f-url").value);
+  if (r.error) { $("f-error").textContent = t[r.error]; return; }
   const type = $("f-type").value;
-  if (type === "embed" && !/^https:\/\//.test(r.url)) { $("f-error").textContent = "嵌入碼的網址必須是 https:// 開頭。"; return; }
-  if (type === "youtube" && !ytId(r.url) && !/channel\/UC/.test(r.url)) {
-    $("f-error").textContent = "這不是 YouTube 影片網址，請改選其他類型。"; return;
-  }
-  cams.push({ name:$("f-name").value.trim(), group:$("f-group").value.trim(), type, url:r.url, note:$("f-note").value.trim() });
+  if (type === "embed" && !/^https:\/\//.test(r.url)) { $("f-error").textContent = t.errHttps; return; }
+  if (type === "youtube" && !ytId(r.url) && !/channel\/UC/.test(r.url)) { $("f-error").textContent = t.errYoutube; return; }
+  cams.push({ name:$("f-name").value.trim(), group:groupToKey($("f-group").value), type, url:r.url, note:$("f-note").value.trim() });
   save(); render(); dlg.close();
 });
-// ── 從分享選單、捷徑或書籤收到的鏡頭 ──
-const APP_URL = location.origin + location.pathname;
-$("ios-url").textContent = APP_URL + "?url=";
-$("bookmarklet").href = "javascript:location.href=" + JSON.stringify(APP_URL + "?url=") +
-  "+encodeURIComponent(location.href)+'&title='+encodeURIComponent(document.title.replace(/ - YouTube$/,''))";
-$("bookmarklet").addEventListener("click", e => { e.preventDefault(); });
 
-let pending = null;
+// ───────────── 從分享選單、捷徑或書籤收到的鏡頭 ─────────────
+let pending = null, pendingGroup = "@fav", incomingError = "";
 function showIncoming(){
   const params = new URLSearchParams(location.search);
   const blob = [params.get("url"), params.get("text"), params.get("title")].filter(Boolean).join(" ");
   if (!blob) return;
   const found = blob.match(/https?:\/\/[^\s"'<>]+/);
-  history.replaceState(null, "", location.pathname);           // 清掉網址參數，重新整理時不會再問一次
-  const box = $("incoming");
-  box.hidden = false;
-  if (!found) { $("in-error").textContent = "沒有收到網址，請再分享一次。"; $("in-ok").disabled = true; return; }
+  history.replaceState(null, "", location.pathname);       // 清掉網址參數，重新整理時不會再問一次
+  $("incoming").hidden = false;
+  const fail = key => { incomingError = key; $("in-error").textContent = T()[key]; $("in-ok").disabled = true; };
+  if (!found) return fail("noUrl");
   const r = parseInput(found[0]);
-  if (r.error) { $("in-error").textContent = r.error; $("in-ok").disabled = true; return; }
+  if (r.error) return fail(r.error);
   pending = r;
-  // 分享時的標題：Android 會放在 title 或網址前面的文字
-  let title = params.get("title") || blob.replace(found[0], "").trim();
-  title = title.replace(/ - YouTube$/, "").trim();
+  // Android 會把標題放在 title，或放在網址前面的文字裡
+  const title = (params.get("title") || blob.replace(found[0], "")).replace(/ - YouTube$/, "").trim();
   $("in-name").value = title.slice(0, 80);
-  $("in-group").value = r.type === "youtube" ? "我的最愛" : "";
-  $("groups-in").innerHTML = [...new Set(cams.map(c => c.group).filter(Boolean))].map(g => `<option value="${esc(g)}">`).join("");
+  $("groups-in").innerHTML = groupOptions();
+  $("in-group").value = groupName(pendingGroup);
   $("in-preview").innerHTML = screenHTML({ ...r, name: title });
   refreshImages();
-  if (!title && r.type === "youtube") {
-    fetch("https://noembed.com/embed?url=" + encodeURIComponent(r.url)).then(x => x.json())
-      .then(j => { if (j.title && !$("in-name").value) $("in-name").value = j.title.slice(0, 80); }).catch(() => {});
-  }
-  box.scrollIntoView({ block: "start" });
+  if (!title && r.type === "youtube") fetchTitle(r.url, $("in-name"));
+  $("incoming").scrollIntoView({ block: "start" });
 }
+$("in-group").addEventListener("input", () => { pendingGroup = groupToKey($("in-group").value); });
 $("in-ok").onclick = () => {
   if (!pending) return;
-  const name = $("in-name").value.trim() || "新的鏡頭";
-  const group = $("in-group").value.trim() || "我的最愛";
-  cams.push({ name, group, type: pending.type, url: pending.url, note: "" });
+  const group = groupToKey($("in-group").value) || "@fav";
+  cams.push({ name: $("in-name").value.trim() || T().newCam, group, type: pending.type, url: pending.url, note: "" });
   save(); filter = group; pending = null;
   $("incoming").hidden = true; $("in-preview").innerHTML = "";
   render();
@@ -376,7 +630,7 @@ $("in-ok").onclick = () => {
 $("in-cancel").onclick = () => { pending = null; $("incoming").hidden = true; $("in-preview").innerHTML = ""; };
 
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
-render();
+applyLang();
 showIncoming();
 </script>
 </body>
